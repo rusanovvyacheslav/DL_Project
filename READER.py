@@ -22,58 +22,59 @@ def FILENAME_TXT(N):
 
     return filename
 
-def READER(N_min=1,N_max=4859,Missing = [0,1623,1626,1632,1648,1650,1655,1660,1670,1690,1695,1708,1710,1717,1719],N_Img=4859):
+def READER(N_Img=4859,XL = 336, YL = 192):
     """ This function serves to interpret .txt files for the project
     and to save all of the data in one pytorch tensor (OUTPUT_SAVE).
 
     The data for each scene  is first turned into an 'image-like' tensor
     (meaning that each value correspond to a pixel) called Output.
-    This tensor has shape 2 x 336 x 192. Output[0] is a 336 x 192
+    This tensor has shape 2 x XL x YL. Output[0] is a XL x YL
     tensor the carries information only of the emtpy drops, whilst
-    Output[1] is a 336 x 192 tensor that carries information only for the
+    Output[1] is a XL x YL tensor that carries information only for the
     drops containing cells.
 
     For simplicity, this tensor is then reshaped as line vector and stored
     in OUTPUT_SAVE. Each line of OUTPUT_SAVE corresponds to one scene's output.
-
-    OUTPUT_SAVE[i] is the output of scene i.
-    This means that OUTPUT_SAVE[0] and OUTPUT_SAVE[j] for j in the missing scenes is zero.
-    This must be taken into account for the training (ignore the missing scenes).
-
-    :param N_min: First scene to take into account (int).
-    :param N_max: Last scene to take into account (int).
-    :param Missing: Missing scenes. For some reason there are missing scenes (list of int's).
-    :param N_Img: Total number of images (4859).
+    
+    :param N_Img: Total number of images (int = 4859).
+    :param XL: Number of pixels in the X axis (int = 336).
+    :param YL: Number of pixels in the Y axis (int = 192).
     :return: OUTPUT_SAVE: The tensor storing all of the outputs (th.tensor).
+             Valid_idx: A list containing the the valid scene indexes (list).
     """
 
-    #N_Img = 4859                                # Total number of images
-    OUTPUT_SAVE = th.zeros(N_Img,336*192*2)     # Tensor for storing all of the outputs
-    #% We may have to adapt this size/shape later on, when implementing batch training. %#
+    # Finding the valid scene values:
+    Valid_idx = []                  # The valid images
+    N_Valid = N_Img                 # Total amount of valid images
+    for N in range(N_Img):          # from 0 to N_Img
+        filename = FILENAME_TXT(N)  # Defines the file's name
+        try:
+            f = open(filename,'r')  # Tries to open the file
+        except FileNotFoundError:   # If it isn't there
+            N_Valid -= 1            # Less 1 valid file
+            continue                # Try next
+        else:                       # Otherwise
+            Valid_idx.append(N)     # The file exists, let's add it to the list
 
-    # The following list groups the missing scenes so far
-    #Missing = [1623,1626,1632,1648,1650,1655,1660,1670,1690,1695,1708,1710,1717,1719]
+    OUTPUT_SAVE = th.zeros(N_Valid,XL*YL*2)     # Tensor for storing all of the outputs
 
-    for N in range(N_min,N_max+1):      # May have to be adapted according to testing
-        if N in Missing:    # If N corresponding to a missing scene
-            continue        # Then continue to next value of N
-
-        filename = FILENAME_TXT(N)              # Defines the file's name
-        f = open(filename,'r')                  # Open the file
+    for N in range(len(Valid_idx)):
+        filename = FILENAME_TXT(Valid_idx[N])   # Defines the file's name
+        f = open(filename,'r')                  # Opens the file (now guaranteed to work)
         RawData = f.readlines()                 # Reads the raw data from the file
         f.close()
 
         # Output Tensor
-        Output = th.zeros(2,336,192)            # Output[0]: Drop_0 data, Output[1]: Drop_1 data
+        Output = th.zeros(2,XL,YL)            # Output[0]: Drop_0 data, Output[1]: Drop_1 data
 
         for i in range(len(RawData)):
 
             Drop_Type = int(RawData[i][0])   # Either 0 or 1, indicating the Drop Type
 
-            xc = round(float(RawData[i][2:10])*336)     # X coordinate of the center of the rectangle
-            yc = round(float(RawData[i][11:19])*192)    # Y coordinate of the center of the rectangle
-            W = round(float(RawData[i][20:28])*336)     # Width (pixels)
-            H = round(float(RawData[i][29:37])*192)     # Height (pixels)
+            xc = round(float(RawData[i][2:10])*XL)     # X coordinate of the center of the rectangle
+            yc = round(float(RawData[i][11:19])*YL)    # Y coordinate of the center of the rectangle
+            W = round(float(RawData[i][20:28])*XL)     # Width (pixels)
+            H = round(float(RawData[i][29:37])*YL)     # Height (pixels)
 
             W2 = round(W/2)     # Half of the width
             H2 = round(H/2)     # Half of the height
@@ -82,52 +83,29 @@ def READER(N_min=1,N_max=4859,Missing = [0,1623,1626,1632,1648,1650,1655,1660,16
 
         OUTPUT_SAVE[N,:] = Output.view(1,-1)    # Saving the final tensor as a vector
 
-    return OUTPUT_SAVE
+    return OUTPUT_SAVE, Valid_idx
 
-def PLOT_TEST(OUTPUT_SAVE,N_min=1,N_max=4858):
+def PLOT_TEST(OUTPUT_SAVE,Valid_idx,N,XL = 336, YL = 192):
     """
     This functions serves to plot the output tensor created with the READER function.
     This serves solely for testing.
-    The first and last plots should be empty (purple).
-    This will break if N_max = N_Img = 4859 because the last plot is for line N_max+1
-    which is impossible if N_max is already the tensor's limit (len(OUTPUT_SAVE[0 or 1]).
-
-    It will plot an empty plot (scene N_min-1)
-    Then a plot for the Drop_0 class for scene N_min
-    Then a plot for the Drop_1 class for scene N_min
-    Then a plot for the Drop_0 class for scene N_max
-    Then a plot for the Drop_1 class for scene N_max
-    Then another empty plot (scene N_max+1)
 
     :param OUTPUT_SAVE: The output tensor that stores all of the outputs (th.tensor).
-    :param N_min: The minimum scene value to check (int).
-    :param N_max: The maximum scene value to check (int).
+    :param N: The number of the scene
     :return: None
     """
-    Test1 = OUTPUT_SAVE[N_min-1,:]
-    Test2 = OUTPUT_SAVE[N_min,:]
-    Test3 = OUTPUT_SAVE[N_max,:]
-    Test4 = OUTPUT_SAVE[N_max+1,:]
+    # Dictionary for translating a scene's number to a line of the output tensor:
+    IDX_dict = {Valid_idx[i]: i for i in range(len(Valid_idx))}
 
-    Test1 = Test1.view(2,336,192)
-    Test2 = Test2.view(2,336,192)
-    Test3 = Test3.view(2,336,192)
-    Test4 = Test4.view(2,336,192)
+    Test = OUTPUT_SAVE[IDX_dict[N],:]   # The output we want to test
+    Test = Test.view(2,XL,YL)         # Turning it into the image's shape
 
-    plt.matshow(np.transpose(Test1.detach().numpy()[0]))
+    plt.matshow(np.transpose(Test.detach().numpy()[0])) # Plotting for the Drop_0 type
     plt.show()
-    plt.matshow(np.transpose(Test2.detach().numpy()[0]))
-    plt.show()
-    plt.matshow(np.transpose(Test2.detach().numpy()[1]))
-    plt.show()
-    plt.matshow(np.transpose(Test3.detach().numpy()[0]))
-    plt.show()
-    plt.matshow(np.transpose(Test3.detach().numpy()[1]))
-    plt.show()
-    plt.matshow(np.transpose(Test4.detach().numpy()[1]))
+    plt.matshow(np.transpose(Test.detach().numpy()[1])) # Plotting for the Drop_1 type
     plt.show()
 
     return None
 
-OUT = READER(1620,1720)     # Just to show how to use it - here for scenes 1620 - 1720, that I labelled
-PLOT_TEST(OUT,1620,1720)    # Plotting
+OUT,IDX = READER()          # Just to show how to use it
+PLOT_TEST(OUT,IDX,1625)     # Plotting for scene nb 1625
