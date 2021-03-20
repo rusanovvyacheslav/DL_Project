@@ -28,6 +28,8 @@ def IMG_SAVER(XL = 336,YL = 192):
     INPUT_SAVE = th.zeros(len(OUT),XL*YL) # for saving the images in only one tensor
     # It's useful to save them like this because this way they'll be more easily called for batch training later
 
+    os.chdir('.//Images') # CHANGE TO THE IMAGES DIRECTORY
+
     for N in range(len(OUT)):
         filename = inv_dict[N]              # We find the file's name from the line number
         filename = filename[0:-4] + '.png'  # We change '.txt' to '.png'
