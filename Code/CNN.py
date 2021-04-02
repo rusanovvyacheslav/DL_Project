@@ -42,6 +42,7 @@ class CNN(nn.Module):
 def train():
     return True
 
+
 def test():
     return True
 
